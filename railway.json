@@ -1,0 +1,10 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "DOTNET",
+    "buildCommand": "dotnet publish Api/Api.csproj -c Release -o out"
+  },
+  "deploy": {
+    "startCommand": "dotnet out/Api.dll"
+  }
+}
