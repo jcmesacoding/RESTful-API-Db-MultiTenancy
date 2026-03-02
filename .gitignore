@@ -11,7 +11,7 @@ obj/
 *.suo
 *.userosscache
 *.sln.docstates
-
+*.zip
 # =========================
 # VS Code
 # =========================
