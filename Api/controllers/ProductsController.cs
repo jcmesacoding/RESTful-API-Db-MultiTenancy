@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
-using Api.Domain.Entities;
+using Domain.Entities;
 using System.Security.Claims;
 
 [ApiController]

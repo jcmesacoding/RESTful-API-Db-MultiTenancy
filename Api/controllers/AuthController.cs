@@ -1,50 +1,74 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 using Api.Security;
-using Api.Domain.Entities;
+using Domain.Entities;
 using System.Security.Claims;
-using Api.Controllers.Models;
+using Infrastructure.Data;
+using BCrypt.Net;
 
 [ApiController]
 [Route("[controller]")]
 public class AuthController : ControllerBase
 {
     private readonly JwtService _jwtService;
+    private readonly ApplicationDbContext _context;
 
-    public AuthController(JwtService jwtService)
+    public AuthController(JwtService jwtService, ApplicationDbContext context)
     {
         _jwtService = jwtService;
+        _context = context;
     }
 
-    private static List<User> users = new List<User>
+    // =========================
+    // REGISTER
+    // =========================
+    [HttpPost("Register")]
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
-        new User
+        if (string.IsNullOrWhiteSpace(request.Username) ||
+            string.IsNullOrWhiteSpace(request.Password) ||
+            string.IsNullOrWhiteSpace(request.Role) ||
+            string.IsNullOrWhiteSpace(request.TenantId))
         {
-            Id = 1,
-            Username = "admin",
-            Password = "123",
-            Role = "Admin",
-            TenantId = "Tenant1"
-        },
-        new User
-        {
-            Id = 2,
-            Username = "user",
-            Password = "123",
-            Role = "User",
-            TenantId = "Tenant2"
+            return BadRequest("Todos los campos son obligatorios");
         }
-    };
 
+        var exists = await _context.Users
+            .AnyAsync(u => u.Username == request.Username);
+
+        if (exists)
+            return BadRequest("El usuario ya existe");
+
+        var user = new User
+        {
+            Username = request.Username,
+            Password = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            Role = request.Role,
+            TenantId = request.TenantId
+        };
+
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync();
+
+        return Ok("Usuario registrado correctamente");
+    }
+
+    // =========================
+    // LOGIN
+    // =========================
     [HttpPost("Login")]
-    public IActionResult Login(LoginRequest request)
+    public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        var user = users.FirstOrDefault(u =>
-            u.Username == request.Username &&
-            u.Password == request.Password
-        );
+        var user = await _context.Users
+            .FirstOrDefaultAsync(u => u.Username == request.Username);
 
         if (user == null)
+            return Unauthorized("Credenciales incorrectas");
+
+        var validPassword = BCrypt.Net.BCrypt.Verify(request.Password, user.Password);
+
+        if (!validPassword)
             return Unauthorized("Credenciales incorrectas");
 
         var token = _jwtService.GenerateToken(user);
@@ -52,41 +76,41 @@ public class AuthController : ControllerBase
         return Ok(new { token });
     }
 
-    [HttpPost("CambioDeClave")]
+    // =========================
+    // CAMBIO DE CLAVE
+    // =========================
     [Authorize]
-    public IActionResult CambioDeClave([FromBody] CambioClaveRequest request)
+    [HttpPost("CambioDeClave")]
+    public async Task<IActionResult> CambioDeClave([FromBody] ChangePasswordRequest request)
     {
-        var username = User.Identity.Name;
+        var username = User.Identity?.Name;
 
-        var user = users.FirstOrDefault(u => u.Username == username);
+        var user = await _context.Users
+            .FirstOrDefaultAsync(u => u.Username == username);
 
         if (user == null)
             return NotFound("Usuario no encontrado");
 
-        if (user.Password != request.PasswordActual)
+        var validPassword = BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.Password);
+
+        if (!validPassword)
             return BadRequest("Contraseña actual incorrecta");
 
-        user.Password = request.PasswordNueva;
+        user.Password = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
 
-        return Ok(new
-        {
-            message = "Contraseña actualizada correctamente"
-        });
+        await _context.SaveChangesAsync();
+
+        return Ok("Contraseña actualizada correctamente");
     }
 
-    [HttpPost("OlvideMiClave")]
-    public IActionResult OlvideMiClave(ForgotPasswordRequest request)
-    {
-        Console.WriteLine($"Solicitud de recuperación para usuario: {request.Username}");
-
-        return Ok("Solicitud registrada en logs");
-    }
-
+    // =========================
+    // PERFIL
+    // =========================
     [Authorize]
     [HttpGet("Profile")]
     public IActionResult Profile()
     {
-        var username = User.Identity.Name;
+        var username = User.Identity?.Name;
         var role = User.FindFirst(ClaimTypes.Role)?.Value;
         var tenantId = User.FindFirst("TenantId")?.Value;
 
@@ -99,19 +123,26 @@ public class AuthController : ControllerBase
     }
 }
 
+// =========================
+// MODELOS
+// =========================
+
+public class RegisterRequest
+{
+    public string Username { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public string TenantId { get; set; } = string.Empty;
+}
+
 public class LoginRequest
 {
-    public string Username { get; set; }
-    public string Password { get; set; }
+    public string Username { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
 }
 
 public class ChangePasswordRequest
 {
-    public string CurrentPassword { get; set; }
-    public string NewPassword { get; set; }
-}
-
-public class ForgotPasswordRequest
-{
-    public string Username { get; set; }
+    public string CurrentPassword { get; set; } = string.Empty;
+    public string NewPassword { get; set; } = string.Empty;
 }

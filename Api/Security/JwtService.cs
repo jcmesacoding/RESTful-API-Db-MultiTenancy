@@ -3,7 +3,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Api.Domain.Entities;
+using Domain.Entities;
 
 namespace Api.Security
 {
@@ -27,7 +27,7 @@ namespace Api.Security
             };
 
             var key = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(_configuration["JWT_Key"])
+                Encoding.UTF8.GetBytes(_configuration["JWT_Key"]!)
             );
 
             var creds = new SigningCredentials(

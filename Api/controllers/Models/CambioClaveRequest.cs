@@ -1,6 +1,6 @@
 namespace Api.Controllers.Models;
 public class CambioClaveRequest
 {
-    public string PasswordActual { get; set; }
-    public string PasswordNueva { get; set; }
+    public required string PasswordActual { get; set; }
+    public required string PasswordNueva { get; set; }
 }
